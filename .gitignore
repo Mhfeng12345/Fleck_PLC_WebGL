@@ -1,0 +1,26 @@
+# IDE
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+bin/
+obj/
+Debug/
+Release/
+*.dll
+*.exe
+*.pdb
+*.xml
+*.log
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Other
+*.cache
+*.dat
+Thumbs.db
