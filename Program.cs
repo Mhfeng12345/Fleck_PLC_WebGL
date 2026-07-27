@@ -1,4 +1,4 @@
-using Fleck;
+﻿using Fleck;
 using Newtonsoft.Json.Linq;
 using S7.Net;
 using System;
@@ -25,7 +25,7 @@ class Program
     static void Main()
     {
         FleckLog.Level = LogLevel.Warn;
-        
+
         new WebSocketServer(configWsIPPort).Start(socket =>
         {
             socket.OnError = ex => Console.WriteLine("[WS] " + ex.Message);
@@ -174,14 +174,14 @@ class Program
             if (!plc.IsConnected)
             {
                 try { plc.Close(); } catch { }
-                throw new Exception("鏈缓绔嬭繛鎺?);
+                throw new Exception("未建立连接");
             }
             return plc;
         });
 
         if (!task.Wait(ConnectTimeoutMs))
         {
-            // 鏃犳硶鍙栨秷 Open锛氬純鐢ㄧ粨鏋滐紝鍚炴帀鍚庣画寮傚父
+            // 无法取消 Open：弃用结果，吞掉后续异常
             task.ContinueWith(t =>
             {
                 try
@@ -196,7 +196,7 @@ class Program
                 }
                 catch { }
             });
-            throw new TimeoutException("杩炴帴瓒呮椂(" + (ConnectTimeoutMs / 1000) + "s): " + ip);
+            throw new TimeoutException("连接超时(" + (ConnectTimeoutMs / 1000) + "s): " + ip);
         }
 
         try
@@ -219,13 +219,13 @@ class Program
 
     static void EnsurePlc()
     {
-        if (!PlcOk()) throw new Exception("PLC 鏈繛鎺?);
+        if (!PlcOk()) throw new Exception("PLC 未连接");
     }
 
     static object ToClr(JToken value, string type)
     {
         if (value == null || value.Type == JTokenType.Null)
-            throw new Exception("value 涓嶈兘涓虹┖");
+            throw new Exception("value 不能为空");
 
         switch (type)
         {
@@ -239,7 +239,7 @@ class Program
             case "real": return value.Value<float>();
             case "double": return value.Value<double>();
             case "string": return value.Value<string>();
-            default: throw new Exception("涓嶆敮鎸佺殑 type: " + type);
+            default: throw new Exception("不支持的 type: " + type);
         }
     }
 
