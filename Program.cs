@@ -1,9 +1,11 @@
-using System;
-using System.Configuration;
-using System.Threading.Tasks;
 using Fleck;
 using Newtonsoft.Json.Linq;
 using S7.Net;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Threading;
+using System.Threading.Tasks;
 
 class Program
 {
@@ -14,13 +16,16 @@ class Program
     static Plc plc;
     static string plcIp = "";
 
+    static Task _watchTask;
+    static CancellationTokenSource _watchCts;
+
     public static string WsIp => ConfigurationManager.AppSettings["WsIp"];
     public static int WsPort => int.Parse(ConfigurationManager.AppSettings["WsPort"]);
     private static string configWsIPPort => $"ws://{WsIp}:{WsPort}";
     static void Main()
     {
         FleckLog.Level = LogLevel.Warn;
-
+        
         new WebSocketServer(configWsIPPort).Start(socket =>
         {
             socket.OnError = ex => Console.WriteLine("[WS] " + ex.Message);
@@ -31,10 +36,14 @@ class Program
             };
             socket.OnClose = () =>
             {
-                if (client == socket) client = null;
+                if (client == socket)
+                {
+                    client = null;
+                    StopWatch();
+                }
                 Console.WriteLine("[-] closed");
             };
-            socket.OnMessage = msg => HandleMessage(socket, msg);
+            socket.OnMessage = msg => _=HandleMessage(socket, msg);
         });
 
         Console.WriteLine($"{configWsIPPort}  connectTimeout={0}ms", ConnectTimeoutMs);
@@ -42,7 +51,7 @@ class Program
         ClosePlc();
     }
 
-    static void HandleMessage(IWebSocketConnection socket, string msg)
+    static async Task HandleMessage(IWebSocketConnection socket, string msg)
     {
         if (socket != client) return;
         Console.WriteLine("[IN] " + msg);
@@ -76,7 +85,7 @@ class Program
                     EnsurePlc();
                     {
                         var address = ((string)@params["address"] ?? "").Trim();
-                        var value = plc.Read(address);
+                         var value = await plc.ReadAsync(address);
                         Reply(socket, "OnReadResult", true, new { address, value });
                     }
                     break;
@@ -87,9 +96,23 @@ class Program
                         var address = ((string)@params["address"] ?? "").Trim();
                         var type = ((string)@params["type"] ?? "").Trim().ToLowerInvariant();
                         var value = ToClr(@params["value"], type);
-                        plc.Write(address, value);
+                        await plc.WriteAsync(address, value);
                         Reply(socket, "OnWriteResult", true, new { address, type, value });
                     }
+                    break;
+                case "StartWatch":
+                    StopWatch();
+                    _watchCts = new CancellationTokenSource();
+                    var token = _watchCts.Token;
+                    var interval = (int)@params["intervalMs"];
+                    var addrs = @params["addresses"]?.ToObject<List<string>>() ?? new List<string>();
+                    _watchTask = Task.Run(() => WatchLoop(socket, addrs, interval, token));
+                    Reply(socket, "OnWatchStartResult", true, null);
+                    break;
+
+                case "StopWatch":
+                    StopWatch();
+                    Reply(socket, "OnWatchEndResult", true, null);
                     break;
 
                 default:
@@ -151,14 +174,14 @@ class Program
             if (!plc.IsConnected)
             {
                 try { plc.Close(); } catch { }
-                throw new Exception("未建立连接");
+                throw new Exception("鏈缓绔嬭繛鎺?);
             }
             return plc;
         });
 
         if (!task.Wait(ConnectTimeoutMs))
         {
-            // 无法取消 Open：弃用结果，吞掉后续异常
+            // 鏃犳硶鍙栨秷 Open锛氬純鐢ㄧ粨鏋滐紝鍚炴帀鍚庣画寮傚父
             task.ContinueWith(t =>
             {
                 try
@@ -173,7 +196,7 @@ class Program
                 }
                 catch { }
             });
-            throw new TimeoutException("连接超时(" + (ConnectTimeoutMs / 1000) + "s): " + ip);
+            throw new TimeoutException("杩炴帴瓒呮椂(" + (ConnectTimeoutMs / 1000) + "s): " + ip);
         }
 
         try
@@ -196,13 +219,13 @@ class Program
 
     static void EnsurePlc()
     {
-        if (!PlcOk()) throw new Exception("PLC 未连接");
+        if (!PlcOk()) throw new Exception("PLC 鏈繛鎺?);
     }
 
     static object ToClr(JToken value, string type)
     {
         if (value == null || value.Type == JTokenType.Null)
-            throw new Exception("value 不能为空");
+            throw new Exception("value 涓嶈兘涓虹┖");
 
         switch (type)
         {
@@ -216,7 +239,7 @@ class Program
             case "real": return value.Value<float>();
             case "double": return value.Value<double>();
             case "string": return value.Value<string>();
-            default: throw new Exception("不支持的 type: " + type);
+            default: throw new Exception("涓嶆敮鎸佺殑 type: " + type);
         }
     }
 
@@ -230,6 +253,38 @@ class Program
             case "S7200": return CpuType.S7200;
             default: return CpuType.S71200;
         }
+    }
+
+    static async Task WatchLoop(IWebSocketConnection socket, List<string> address,int intervalMs, CancellationToken ct)
+    {
+        var prev = new Dictionary<string, object>();
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(intervalMs, ct);
+            if (!socket.IsAvailable) break;
+
+            var changes = new List<object>();
+            foreach (var a in address)
+            {
+                object val;
+                try { val = await plc.ReadAsync(a); } catch { continue; }
+
+                if (!prev.TryGetValue(a, out var old) || !Equals(old, val))
+                {
+                    changes.Add(new { address = a, value = val });
+                    prev[a] = val;
+                }
+            }
+            if (changes.Count > 0)
+                Reply(socket, "OnWatchData", true, new { values = changes });
+        }
+    }
+
+    static void StopWatch()
+    {
+        try { _watchCts?.Cancel(); } catch { }
+        _watchCts = null;
+        _watchTask = null;
     }
 
     // -------- JSON --------
