@@ -1,17 +1,21 @@
 # Fleck_PLC_WebGL
 
-WebSocket 鈫?Siemens PLC 妗ユ帴鏈嶅姟銆?
-閫氳繃 WebSocket 灏?WebGL 鍓嶇涓庤タ闂ㄥ瓙 PLC锛圫7 鍗忚锛夎繛鎺ワ紝瀹炵幇瀵?PLC 鏁版嵁鐨勫疄鏃惰鍐欎笌鍙樺寲鎺ㄩ€併€?
-## 鍔熻兘
+WebSocket ↔ Siemens PLC 桥接服务。
 
-- **WebSocket 鏈嶅姟鍣?*锛堝熀浜?Fleck 搴擄級
-- **PLC 杩炴帴绠＄悊**锛氳繛鎺?鏂紑瑗块棬瀛?S7 绯诲垪 PLC
-- **鏁版嵁璇诲啓**锛氭敮鎸?Bool銆丅yte銆丼hort銆両nt銆丗loat銆丏ouble銆丼tring 绛夌被鍨?- **鍚庡彴 Watch 杞**锛歚StartWatch` 鍚姩鍚庡彴绾跨▼瀹氭椂杞锛岄娆″叏閲忔帹閫併€佸悗缁粎鍊煎彉鍖栨椂涓诲姩鎺ㄩ€?`OnWatchData`
-- **JSON 鍗忚**锛氬熀浜?JSON-RPC 椋庢牸鐨勮姹?鍝嶅簲
+通过 WebSocket 将 WebGL 前端与西门子 PLC（S7 协议）连接，实现对 PLC 数据的实时读写与变化推送。
 
-## 閰嶇疆
+## 功能
 
-缂栬緫 `App.config`锛?
+- **WebSocket 服务器**（基于 Fleck 库）
+- **PLC 连接管理**：连接/断开西门子 S7 系列 PLC
+- **数据读写**：支持 Bool、Byte、Short、Int、Float、Double、String 等类型
+- **后台 Watch 轮询**：`StartWatch` 启动后台线程定时轮询，首次全量推送、后续仅值变化时主动推送 `OnWatchData`
+- **JSON 协议**：基于 JSON-RPC 风格的请求/响应
+
+## 配置
+
+编辑 `App.config`：
+
 ```xml
 <appSettings>
   <add key="WsIp" value="127.0.0.1" />
@@ -19,9 +23,9 @@ WebSocket 鈫?Siemens PLC 妗ユ帴鏈嶅姟銆?
 </appSettings>
 ```
 
-## 鏀寔 PLC 鍨嬪彿
+## 支持 PLC 型号
 
-- S7-1200锛堥粯璁わ級
+- S7-1200（默认）
 - S7-1500
 - S7-300
 - S7-400
@@ -29,37 +33,37 @@ WebSocket 鈫?Siemens PLC 妗ユ帴鏈嶅姟銆?
 
 ## WebSocket API
 
-### 璇锋眰鏍煎紡
+### 请求格式
 
 ```json
 {
-  "method": "鏂规硶鍚?,
+  "method": "方法名",
   "params": { ... }
 }
 ```
 
-### 鏂规硶鍒楄〃
+### 方法列表
 
-| 鏂规硶 | 鏂瑰悜 | 璇存槑 |
+| 方法 | 方向 | 说明 |
 |:---|:---|:---|
-| `Ping` | C鈫扐 | 妫€娴嬭繛鎺ョ姸鎬?|
-| `PlcStatus` | C鈫扐 | 鑾峰彇 PLC 杩炴帴鐘舵€?|
-| `PlcConnect` | C鈫扐 | 杩炴帴鍒?PLC |
-| `PlcDisconnect` | C鈫扐 | 鏂紑 PLC |
-| `Read` | C鈫扐 | 璇诲彇 PLC 鍦板潃 |
-| `Write` | C鈫扐 | 鍐欏叆 PLC 鍦板潃锛堥渶 type锛?|
-| `StartWatch` | C鈫扐 | 鍚姩鍚庡彴杞 `{ intervalMs, addresses[] }` |
-| `StopWatch` | C鈫扐 | 鍋滄鍚庡彴杞 |
-| `OnWatchData` | A鈫扖 | 涓诲姩鎺ㄩ€侊細鍊煎彉鍖栨椂 `{ values: [{address, value}] }` |
+| `Ping` | C→A | 检测连接状态 |
+| `PlcStatus` | C→A | 获取 PLC 连接状态 |
+| `PlcConnect` | C→A | 连接到 PLC |
+| `PlcDisconnect` | C→A | 断开 PLC |
+| `Read` | C→A | 读取 PLC 地址 |
+| `Write` | C→A | 写入 PLC 地址（需 type） |
+| `StartWatch` | C→A | 启动后台轮询 `{ intervalMs, addresses[] }` |
+| `StopWatch` | C→A | 停止后台轮询 |
+| `OnWatchData` | A→C | 主动推送：值变化时 `{ values: [{address, value}] }` |
 
-## 鎶€鏈爤
+## 技术栈
 
 - .NET Framework 4.7.2
 - Fleck (WebSocket)
 - S7netplus (Siemens PLC)
 - Newtonsoft.Json
 
-## 鏇存柊鏃ュ織
+## 更新日志
 
-- **v0.2** 鈥?鏂板 StartWatch/StopWatch锛氬悗鍙?Task.Run 杞锛屽€煎彉鍖栨帹閫?OnWatchData
-- **v0.1** 鈥?鍩虹璇诲啓娑堟伅妗ワ紝WebSocket 鈫?S7.Net
+- **v0.2** — 新增 StartWatch/StopWatch：后台 Task.Run 轮询，值变化推送 OnWatchData
+- **v0.1** — 基础读写消息桥，WebSocket ↔ S7.Net
