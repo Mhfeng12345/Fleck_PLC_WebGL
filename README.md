@@ -1,16 +1,21 @@
 # Fleck_PLC_WebGL
 
-WebSocket 鈫?Siemens PLC 妗ユ帴鏈嶅姟銆?
-閫氳繃 WebSocket 灏?WebGL 鍓嶇涓庤タ闂ㄥ瓙 PLC锛圫7 鍗忚锛夎繛鎺ワ紝瀹炵幇瀵?PLC 鏁版嵁鐨勫疄鏃惰鍐欍€?
-## 鍔熻兘
+WebSocket ↔ Siemens PLC 桥接服务。
 
-- **WebSocket 鏈嶅姟鍣?*锛堝熀浜?Fleck 搴擄級
-- **PLC 杩炴帴绠＄悊**锛氳繛鎺?鏂紑瑗块棬瀛?S7 绯诲垪 PLC
-- **鏁版嵁璇诲啓**锛氭敮鎸?Bool銆丅yte銆丼hort銆両nt銆丗loat銆丏ouble銆丼tring 绛夌被鍨?- **Watch 鏈哄埗**锛氬悗鍙拌疆璇?PLC 鍦板潃锛屽€煎彉鍖栨椂涓诲姩鎺ㄩ€?- **JSON 鍗忚**锛氬熀浜?JSON-RPC 椋庢牸鐨勮姹?鍝嶅簲
+通过 WebSocket 将 WebGL 前端与西门子 PLC（S7 协议）连接，实现对 PLC 数据的实时读写。
 
-## 閰嶇疆
+## 功能
 
-缂栬緫 `App.config`锛?
+- **WebSocket 服务器**（基于 Fleck 库）
+- **PLC 连接管理**：连接/断开西门子 S7 系列 PLC
+- **数据读写**：支持 Bool、Byte、Short、Int、Float、Double、String 等类型
+- **Watch 机制**：后台轮询 PLC 地址，值变化时主动推送
+- **JSON 协议**：基于 JSON-RPC 风格的请求/响应
+
+## 配置
+
+编辑 `App.config`：
+
 ```xml
 <appSettings>
   <add key="WsIp" value="127.0.0.1" />
@@ -18,57 +23,58 @@ WebSocket 鈫?Siemens PLC 妗ユ帴鏈嶅姟銆?
 </appSettings>
 ```
 
-## 鏀寔 PLC 鍨嬪彿
+## 支持 PLC 型号
 
-- S7-1200锛堥粯璁わ級
+- S7-1200（默认）
 - S7-1500
 - S7-300
 - S7-400
 - S7-200
 
-## WebSocket 鍗忚
+## WebSocket 协议
 
-### 璇锋眰鏍煎紡
+### 请求格式
 
 ```json
 {
-  "method": "鏂规硶鍚?,
+  "method": "方法名",
   "params": { ... }
 }
 ```
 
-### 鍝嶅簲鏍煎紡
+### 响应格式
 
 ```json
 {
   "method": "OnResultName",
   "params": {
     "ok": true,
-    "...": "涓氬姟瀛楁"
+    "...": "业务字段"
   }
 }
 ```
 
-### 鏂规硶鍒楄〃
+### 方法列表
 
-| 鏂规硶 | 鏂瑰悜 | 鍥炴墽 | 璇存槑 |
+| 方法 | 方向 | 回执 | 说明 |
 |------|------|------|------|
-| `Ping` | C鈫扴 | `Pong` | 妫€娴嬭繛鎺ョ姸鎬?|
-| `PlcStatus` | C鈫扴 | `OnPlcStatus` | 鑾峰彇 PLC 杩炴帴鐘舵€?|
-| `PlcConnect` | C鈫扴 | `OnPlcConnectResult` | 杩炴帴鍒?PLC锛堝弬鏁?ip/cpu/rack/slot锛?|
-| `PlcDisconnect` | C鈫扴 | `OnPlcDisconnectResult` | 鏂紑 PLC |
-| `Read` | C鈫扴 | `OnReadResult` | 璇诲彇 PLC 鍦板潃 |
-| `Write` | C鈫扴 | `OnWriteResult` | 鍐欏叆 PLC 鍦板潃锛堥渶 type锛?|
-| `StartWatch` | C鈫扴 | `OnWatchStartResult` | 鍚姩鍚庡彴杞锛堝弬鏁?intervalMs/addresses[]锛?|
-| `StopWatch` | C鈫扴 | `OnWatchEndResult` | 鍋滄鍚庡彴杞 |
-| `OnWatchData` | S鈫扖 |锛堜富鍔ㄦ帹閫侊級| 鍊煎彉鍖栨椂鎺ㄩ€?`{ values: [{address, value}] }` |
+| `Ping` | C→S | `Pong` | 检测连接状态 |
+| `PlcStatus` | C→S | `OnPlcStatus` | 获取 PLC 连接状态 |
+| `PlcConnect` | C→S | `OnPlcConnectResult` | 连接到 PLC（参数 ip/cpu/rack/slot） |
+| `PlcDisconnect` | C→S | `OnPlcDisconnectResult` | 断开 PLC |
+| `Read` | C→S | `OnReadResult` | 读取 PLC 地址 |
+| `Write` | C→S | `OnWriteResult` | 写入 PLC 地址（需 type） |
+| `StartWatch` | C→S | `OnWatchStartResult` | 启动后台轮询（参数 intervalMs/addresses[]） |
+| `StopWatch` | C→S | `OnWatchEndResult` | 停止后台轮询 |
+| `OnWatchData` | S→C |（主动推送）| 值变化时推送 `{ values: [{address, value}] }` |
 
-### Watch 鏈哄埗
+### Watch 机制
 
-Agent 鍚庡彴绾跨▼鎸?`intervalMs` 闂撮殧杞鎵€鏈夊湴鍧€锛?*棣栨鍏ㄩ噺鎺ㄩ€侊紝鍚庣画浠呮帹閫佸彉鍖栧€?*銆?
-### 绫诲瀷鏄犲皠
+Agent 后台线程按 `intervalMs` 间隔轮询所有地址，**首次全量推送，后续仅推送变化值**。
 
-| Wire | C# 绫诲瀷 |
+### 类型映射
+
+| Wire | C# 类型 |
 |------|---------|
 | `bool` | `bool` |
 | `byte` | `byte` |
@@ -80,18 +86,20 @@ Agent 鍚庡彴绾跨▼鎸?`intervalMs` 闂撮殧杞鎵€鏈夊湴鍧€
 | `double` | `double` |
 | `string` | `string` |
 
-## 宸茬煡闂
+## 已知问题
 
-### DBD/MD 鍦板潃 REAL 绫诲瀷璇诲彇
+### DBD/MD 地址 REAL 类型读取
 
-S7.Net 鐢?`plc.ReadAsync("DB1.DBD32")` 璇诲彇 REAL 鏃惰繑鍥?`uint`锛堝 `1106247680`锛夛紝鑰岄潪 `float`锛坄30.0`锛夈€?Agent 鍦?`Read` 鍜?`WatchLoop` 涓嚜鍔ㄦ娴?DBD/MD 鍦板潃锛岃皟鐢?`BitConverter.ToSingle` 杞崲銆?
-## 鎶€鏈爤
+S7.Net 用 `plc.ReadAsync("DB1.DBD32")` 读取 REAL 时返回 `uint`（如 `1106247680`），而非 `float`（`30.0`）。
+Agent 在 `Read` 和 `WatchLoop` 中自动检测 DBD/MD 地址，调用 `BitConverter.ToSingle` 转换。
+
+## 技术栈
 
 - .NET Framework 4.7.2
 - Fleck (WebSocket)
 - S7netplus (Siemens PLC)
 - Newtonsoft.Json
 
-## 鐗堟湰
+## 版本
 
-- **v0.3** 鈥?DBD/MD float 鑷姩杞崲 + Watch 鍙樺寲鎺ㄩ€
+- **v0.3** — DBD/MD float 自动转换 + Watch 变化推送
